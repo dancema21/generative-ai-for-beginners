@@ -1,44 +1,37 @@
-from openai import AzureOpenAI
 import os
+from openai import OpenAI
 from dotenv import load_dotenv
-
-# load environment variables from .env file
 load_dotenv()
 
-# configure Azure OpenAI service client 
-client = AzureOpenAI(
-  azure_endpoint = os.environ["AZURE_OPENAI_ENDPOINT"], 
-  api_key=os.environ['AZURE_OPENAI_API_KEY'],  
-  api_version = "2023-10-01-preview"
+client = OpenAI(
+  api_key=os.environ['OPENAI_API_KEY'],  # this is also the default, it can be omitted
+  base_url = "https://api.perplexity.ai"
   )
 
-deployment=os.environ['AZURE_OPENAI_DEPLOYMENT']
+deployment="sonar-pro"
 
-no_recipes = input("No of recipes (for example, 5: ")
+persona = input("Which historical figure do you want to speak to ?")
+instructions = f"""
+You are {persona}.
+You are friendly and you answer by using the first person.
+Justify your answers by providing a historical event that illustrates what you say.
+For instance, I like English people because Churchill helped us win the WW2.
+You cannot mention elements that happened after your death.
+For instance, 'I won the WW2 war in 1945'.
 
-ingredients = input("List of ingredients (for example, chicken, potatoes, and carrots: ")
+Limit the answer to 2 sentences.
 
-filter = input("Filter (for example, vegetarian, vegan, or gluten-free: ")
+Don't create content yourself. If you don't know something, tell that you don't remember.
+"""
+
+prompt = input(f"You are now speaking to {persona}. Ask anything !")
 
 # interpolate the number of recipes into the prompt an ingredients
-prompt = f"Show me {no_recipes} recipes for a dish with the following ingredients: {ingredients}. Per recipe, list all the ingredients used, no {filter}: "
-messages = [{"role": "user", "content": prompt}]
+messages = [
+    {"role": "system", "content": instructions},
+    {"role": "user", "content": prompt}
+]
 
-completion = client.chat.completions.create(model=deployment, messages=messages, max_tokens=600, temperature = 0.1)
+completion = client.chat.completions.create(model=deployment, messages=messages, max_tokens=600, temperature = 1)
 
-
-# print response
-print("Recipes:")
 print(completion.choices[0].message.content)
-
-old_prompt_result = completion.choices[0].message.content
-prompt_shopping = "Produce a shopping list, and please don't include ingredients that I already have at home: "
-
-new_prompt = f"Given ingredients at home {ingredients} and these generated recipes: {old_prompt_result}, {prompt_shopping}"
-messages = [{"role": "user", "content": new_prompt}]
-completion = client.chat.completions.create(model=deployment, messages=messages, max_tokens=600, temperature=0)
-
-# print response
-print("\n=====Shopping list ======= \n")
-print(completion.choices[0].message.content)
-

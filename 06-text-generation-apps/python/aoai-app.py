@@ -1,30 +1,34 @@
-# pylint: disable=all
-from openai import AzureOpenAI
 import os
+from openai import OpenAI
 from dotenv import load_dotenv
-
-# load environment variables from .env file
 load_dotenv()
 
-# configure Azure OpenAI service client 
-client = AzureOpenAI(
-  azure_endpoint = os.environ["AZURE_OPENAI_ENDPOINT"], 
-  api_key=os.environ['AZURE_OPENAI_API_KEY'],  
-  api_version = "2024-02-01"
-#  api_version = "2023-05-15"
+client = OpenAI(
+  api_key=os.environ['OPENAI_API_KEY'],  # this is also the default, it can be omitted
+  base_url = "https://api.perplexity.ai"
   )
 
-deployment=os.environ['AZURE_OPENAI_DEPLOYMENT']
+deployment="sonar-pro"
+
+number_recipes = input("Number of recipies :")
+ingredients = input("List of ingredients (for example : chicken, carrots, eggs) :")
+filter = input("Any ingredients you don't wont (for example : olives) :")
 
 # add your completion code
-prompt = "Complete the following: Once upon a time there was a"
+prompt = f"""Show me {number_recipes} recipes for a dish with the following ingredients: {ingredients}. The recipies should not include the following ingredients : {filter}. Per recipe, gie the name of the dish and all the ingredients used"""
 messages = [{"role": "user", "content": prompt}]  
 # make completion
 completion = client.chat.completions.create(model=deployment, messages=messages)
 
 # print response
-print(completion.choices[0].message.content)
+old_prompt_result = completion.choices[0].message.content
 
-#  very unhappy _____.
+prompt = "Produce a shopping list for the generated recipes and please don't include ingredients that I already have."
+new_prompt = f"{old_prompt_result} {prompt}"
+messages = [{"role": "user", "content": new_prompt}]
 
-# Once upon a time there was a very unhappy mermaid.
+new_completion = client.chat.completions.create(model=deployment, messages=messages, max_tokens=1200)
+
+print("Shopping list:")
+print(new_completion.choices[0].message.content)
+
