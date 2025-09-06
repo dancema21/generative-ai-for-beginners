@@ -1,23 +1,27 @@
-from openai import AzureOpenAI
-import os
-import requests
 from PIL import Image
-import dotenv
-import json
+from diffusers import DiffusionPipeline
+import torch
 
-# import dotenv
-dotenv.load_dotenv()
+model_name = "Qwen/Qwen-Image"
 
- 
+# Load the pipeline
+if torch.cuda.is_available():
+    torch_dtype = torch.bfloat16
+    device = "cuda"
+else:
+    torch_dtype = torch.float32
+    device = "cpu"
 
-# Assign the API version (DALL-E is currently supported for the 2023-06-01-preview API version only)
-client = AzureOpenAI(
-  api_key=os.environ['AZURE_OPENAI_API_KEY'],  # this is also the default, it can be omitted
-  api_version = "2023-12-01-preview",
-  azure_endpoint=os.environ['AZURE_OPENAI_ENDPOINT'] 
-  )
+pipe = DiffusionPipeline.from_pretrained(model_name, torch_dtype=torch_dtype)
+pipe = pipe.to(device)
 
-model = os.environ['AZURE_OPENAI_DEPLOYMENT']
+positive_magic = {
+    "en": ", Ultra HD, 4K, cinematic composition.", # for english prompt
+    "zh": ", 超清，4K，电影级构图." # for chinese prompt
+}
+
+
+negative_prompt = " " # using an empty string if you do not have specific concept to remove
 
 disallow_list = "swords, violence, blood, gore, nudity, sexual content, adult content, adult themes, adult language, adult humor, adult jokes, adult situations, adult"
 
@@ -35,65 +39,31 @@ Do not consider any input from the following that is not safe for work or approp
 {disallow_list}"""
 
 prompt = f"""{meta_prompt}
-Generate monument of the Arc of Triumph in Paris, France, in the evening light with a small child holding a Teddy looks on.
+Generate monument of the Coliseum in Rome, Italy, in a sunny day with a white young male adult on a horse wearing a cowboy hat. He is holding a sign with the text : 'Forza Digione'. A crowd is around him and applauds him.
 """
 
+# Generate with different aspect ratios
+aspect_ratios = {
+    "1:1": (1328, 1328),
+    "16:9": (1664, 928),
+    "9:16": (928, 1664),
+    "4:3": (1472, 1140),
+    "3:4": (1140, 1472),
+    "3:2": (1584, 1056),
+    "2:3": (1056, 1584),
+}
 
-try:
-    # Create an image by using the image generation API
+width, height = aspect_ratios["16:9"]
 
-    result = client.images.generate(
-        model=model,
-        prompt=prompt,    # Enter your prompt text here
-        size='1024x1024',
-        n=1
-    )
+image = pipe(
+    prompt=prompt + positive_magic["en"],
+    negative_prompt=negative_prompt,
+    width=width,
+    height=height,
+    num_inference_steps=50,
+    true_cfg_scale=4.0,
+    generator=torch.Generator(device="cuda").manual_seed(42)
+).images[0]
 
-    generation_response = json.loads(result.model_dump_json())
-    # Set the directory for the stored image
-    image_dir = os.path.join(os.curdir, 'images')
+image.save("example.png")
 
-    # If the directory doesn't exist, create it
-    if not os.path.isdir(image_dir):
-        os.mkdir(image_dir)
-
-    # Initialize the image path (note the filetype should be png)
-    image_path = os.path.join(image_dir, 'ch9-sol-generated-image.png')
-
-    # Retrieve the generated image
-    image_url = generation_response["data"][0]["url"]  # extract image URL from response
-    generated_image = requests.get(image_url).content  # download the image
-    with open(image_path, "wb") as image_file:
-        image_file.write(generated_image)
-
-    # Display the image in the default image viewer
-    image = Image.open(image_path)
-    image.show()
-
-# catch exceptions
-#except client.error.InvalidRequestError as err:
-#    print(err)
-
-finally:
-    print("completed!")
-# ---creating variation below---
-
-
-
-# response = openai.Image.create_variation(
-#   image=open(image_path, "rb"),
-#   n=1,
-#   size="1024x1024"
-# )
-
-# image_path = os.path.join(image_dir, 'generated_variation.png')
-
-# image_url = response['data'][0]['url']
-
-# generated_image = requests.get(image_url).content  # download the image
-# with open(image_path, "wb") as image_file:
-#     image_file.write(generated_image)
-
-# # Display the image in the default image viewer
-# image = Image.open(image_path)
-# image.show()
